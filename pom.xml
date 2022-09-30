@@ -101,8 +101,14 @@
 			<artifactId>n5</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-java-sdk-s3</artifactId>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-viewer_fiji</artifactId>
+			<version>4.5.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.jgit</groupId>
+			<artifactId>org.eclipse.jgit</artifactId>
+			<version>6.1.0.202203080745-r</version>
 		</dependency>
 
 		<!-- Test dependencies -->
