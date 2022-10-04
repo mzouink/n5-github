@@ -111,6 +111,7 @@ public class GithubRepo {
 		return git.getRepository().open(files.get(path));
 	}
 
+
 	public Map<String, ObjectId> getFiles() {
 		return files;
 	}

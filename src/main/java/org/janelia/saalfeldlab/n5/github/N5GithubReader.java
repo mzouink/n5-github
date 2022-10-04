@@ -37,6 +37,7 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.janelia.saalfeldlab.n5.*;
 import org.janelia.saalfeldlab.n5.github.lib.GithubRepo;
+import org.janelia.saalfeldlab.n5.github.lib.N5GithubBackend;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 
 import java.io.IOException;
@@ -46,148 +47,201 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 
 public class N5GithubReader extends AbstractGsonReader implements N5Reader {
-	private final GithubRepo repo;
+    private final GithubRepo repo;
+    private final String subPath;
 
-	public N5GithubReader(String url, String branch) throws IOException, GitAPIException {
-		this(new GithubRepo(url,branch), new GsonBuilder());
-	}
+    private N5GithubReader(Builder builder) throws IOException, GitAPIException {
+        super(builder.gsonBuilder);
+        this.subPath = builder.subPath;
+        this.repo = new GithubRepo(builder.url, builder.branch);
+    }
 
-	private N5GithubReader(GithubRepo repo,  GsonBuilder gsonBuilder) {
-		super(gsonBuilder);
-		this.repo = repo;
-	}
+    public static class Builder {
+        private final String url;
+        public GsonBuilder gsonBuilder = new GsonBuilder();
+        private String branch = "main";
+        private N5GithubBackend backend = N5GithubBackend.N5;
+        private String subPath = "";
 
-	public boolean exists(String pathName) {
-		String fullPath = this.getFullPath(pathName);
-		if (fullPath.isEmpty())
-			return true;
-		boolean result = repo.exists(pathName);
-		System.out.println("File "+pathName+" : "+result);
-		return result;
-	}
+        public Builder setBranch(String branch) {
+            this.branch = branch;
+            return this;
+        }
 
-	public HashMap<String, JsonElement> getAttributes(String pathName) throws IOException {
-		String attributesKey = this.getAttributesKey(pathName);
-		if (!repo.exists(attributesKey)){
-			System.out.println("Attribute key not found "+attributesKey);
-			return new HashMap();
-		} else {
-			InputStream in = this.readGithubObject(attributesKey);
-			Throwable var4 = null;
+        public Builder setBackend(N5GithubBackend backend) {
+            this.backend = backend;
+            return this;
+        }
 
-			HashMap var5;
-			try {
-				var5 = GsonAttributesParser.readAttributes(new InputStreamReader(in), this.gson);
-			} catch (Throwable var14) {
-				var4 = var14;
-				throw var14;
-			} finally {
-				if (in != null) {
-					if (var4 != null) {
-						try {
-							in.close();
-						} catch (Throwable var13) {
-							var4.addSuppressed(var13);
-						}
-					} else {
-						in.close();
-					}
-				}
+        public Builder setSubPath(String subPath) {
+            this.subPath = subPath;
+            return this;
+        }
 
-			}
+        public Builder setGsonBuilder(GsonBuilder gsonBuilder) {
+            this.gsonBuilder = gsonBuilder;
+            return this;
+        }
 
-			return var5;
-		}
-	}
+        private Builder(String url) {
+            this.url = url;
+        }
 
-	public DataBlock<?> readBlock(String pathName, DatasetAttributes datasetAttributes, long... gridPosition) throws IOException {
-		String dataBlockKey = this.getDataBlockKey(pathName, gridPosition);
-		if (!repo.exists(dataBlockKey)){
-			System.out.println("Attribute key not found "+dataBlockKey);
-			return null;
-		} else {
-			InputStream in = this.readGithubObject(dataBlockKey);
-			Throwable var6 = null;
+        private N5Reader build() throws GitAPIException, IOException {
+            switch (backend) {
+                case N5:
+                    return new N5GithubReader(this);
+                case Zarr:
+                    throw new IOException("Zarr not implemented yet!");
+                default:
+                    throw new IOException(backend.name() + " not implemented yet!");
+            }
+        }
 
-			DataBlock var7;
-			try {
-				var7 = DefaultBlockReader.readBlock(in, datasetAttributes, gridPosition);
-			} catch (Throwable var16) {
-				var6 = var16;
-				throw var16;
-			} finally {
-				if (in != null) {
-					if (var6 != null) {
-						try {
-							in.close();
-						} catch (Throwable var15) {
-							var6.addSuppressed(var15);
-						}
-					} else {
-						in.close();
-					}
-				}
 
-			}
+        private static Builder builder(String url) {
+            return new Builder(url);
+        }
+    }
 
-			return var7;
-		}
-	}
 
-	public String[] list(String pathName) throws IOException {
-		String fullPath = this.getFullPath(pathName);
-		if (fullPath.isEmpty())
-			return repo.getFiles().keySet().stream().toArray(String[]::new);
-		else
-			return repo.getFiles().keySet().stream().filter(e -> e.contains(fullPath)).toArray(String[]::new);
-	}
+    public boolean exists(String pathName) {
+        String fullPath = this.getFullPath(pathName);
+        if (fullPath.isEmpty())
+            return true;
+        boolean result = repo.exists(pathName);
+        System.out.println("File " + pathName + " : " + result);
+        return result;
+    }
 
-	protected InputStream readGithubObject(String objectKey) throws IOException {
-		ObjectLoader loader = repo.readFile(objectKey);
-		return loader.openStream();
-	}
+    public HashMap<String, JsonElement> getAttributes(String pathName) throws IOException {
+        String attributesKey = this.getAttributesKey(pathName);
+        if (!repo.exists(attributesKey)) {
+            System.out.println("Attribute key not found " + attributesKey);
+            return new HashMap();
+        } else {
+            InputStream in = this.readGithubObject(attributesKey);
+            Throwable var4 = null;
 
-	protected static String replaceBackSlashes(String pathName) {
-		return pathName.replace("\\", "/");
-	}
+            HashMap var5;
+            try {
+                var5 = GsonAttributesParser.readAttributes(new InputStreamReader(in), this.gson);
+            } catch (Throwable var14) {
+                var4 = var14;
+                throw var14;
+            } finally {
+                if (in != null) {
+                    if (var4 != null) {
+                        try {
+                            in.close();
+                        } catch (Throwable var13) {
+                            var4.addSuppressed(var13);
+                        }
+                    } else {
+                        in.close();
+                    }
+                }
 
-	protected static String removeLeadingSlash(String pathName) {
-		return !pathName.startsWith("/") && !pathName.startsWith("\\") ? pathName : pathName.substring(1);
-	}
+            }
 
-	protected static String addTrailingSlash(String pathName) {
-		return !pathName.endsWith("/") && !pathName.endsWith("\\") ? pathName + "/" : pathName;
-	}
+            return var5;
+        }
+    }
 
-	protected String getDataBlockKey(String datasetPathName, long... gridPosition) {
-		String[] pathComponents = new String[gridPosition.length];
+    public DataBlock<?> readBlock(String pathName, DatasetAttributes datasetAttributes, long... gridPosition) throws IOException {
+        String dataBlockKey = this.getDataBlockKey(pathName, gridPosition);
+        if (!repo.exists(dataBlockKey)) {
+            System.out.println("Attribute key not found " + dataBlockKey);
+            return null;
+        } else {
+            InputStream in = this.readGithubObject(dataBlockKey);
+            Throwable var6 = null;
 
-		for(int i = 0; i < pathComponents.length; ++i) {
-			pathComponents[i] = Long.toString(gridPosition[i]);
-		}
+            DataBlock var7;
+            try {
+                var7 = DefaultBlockReader.readBlock(in, datasetAttributes, gridPosition);
+            } catch (Throwable var16) {
+                var6 = var16;
+                throw var16;
+            } finally {
+                if (in != null) {
+                    if (var6 != null) {
+                        try {
+                            in.close();
+                        } catch (Throwable var15) {
+                            var6.addSuppressed(var15);
+                        }
+                    } else {
+                        in.close();
+                    }
+                }
 
-		String dataBlockPathName = Paths.get(removeLeadingSlash(datasetPathName), pathComponents).toString();
-		return this.getFullPath(dataBlockPathName);
-	}
+            }
 
-	protected String getFullPath(String relativePath) {
-return removeLeadingSlash(replaceBackSlashes(relativePath));
-	}
+            return var7;
+        }
+    }
 
-	protected String getAttributesKey(String pathName) {
-		String attributesPath = Paths.get(removeLeadingSlash(pathName), "attributes.json").toString();
-		return this.getFullPath(attributesPath);
-	}
+    public String[] list(String pathName) {
+        String fullPath = this.getFullPath(pathName);
+        if (fullPath.isEmpty())
+            return repo.getFiles().keySet().stream().toArray(String[]::new);
+        else
+            return repo.getFiles().keySet().stream().filter(e -> e.contains(fullPath)).toArray(String[]::new);
+    }
 
-	public static void main(String[] args) throws GitAPIException, IOException {
-		String url = "https://github.com/mzouink/n5_image.git";
-		String branch = "main";
-		String dataset = "setup0/timepoint0/s0";
+    protected InputStream readGithubObject(String objectKey) throws IOException {
+        ObjectLoader loader = repo.readFile(objectKey);
+        return loader.openStream();
+    }
 
-		N5Reader reader = new N5GithubReader(url,branch);
-		System.out.println("Created");
-		CachedCellImg<FloatType, ?> img = N5Utils.open(reader, dataset);
-		ImageJFunctions.show(img);
-	}
+    protected static String replaceBackSlashes(String pathName) {
+        return pathName.replace("\\", "/");
+    }
+
+    protected static String removeLeadingSlash(String pathName) {
+        return !pathName.startsWith("/") && !pathName.startsWith("\\") ? pathName : pathName.substring(1);
+    }
+
+    protected static String addTrailingSlash(String pathName) {
+        return !pathName.endsWith("/") && !pathName.endsWith("\\") ? pathName + "/" : pathName;
+    }
+
+    protected String getDataBlockKey(String datasetPathName, long... gridPosition) {
+        String[] pathComponents = new String[gridPosition.length];
+
+        for (int i = 0; i < pathComponents.length; ++i) {
+            pathComponents[i] = Long.toString(gridPosition[i]);
+        }
+
+        String dataBlockPathName = Paths.get(removeLeadingSlash(datasetPathName), pathComponents).toString();
+        return this.getFullPath(dataBlockPathName);
+    }
+
+    protected String getFullPath(String relativePath) {
+        String fullPath = Paths.get(removeLeadingSlash(this.subPath), relativePath).toString();
+        return removeLeadingSlash(replaceBackSlashes(fullPath));
+    }
+
+    protected String getAttributesKey(String pathName) {
+        String attributesPath = Paths.get(removeLeadingSlash(pathName), "attributes.json").toString();
+        return this.getFullPath(attributesPath);
+    }
+
+    public static void main(String[] args) throws GitAPIException, IOException {
+        String url = "https://github.com/mzouink/n5_image.git";
+        String branch = "main";
+        String dataset = "setup0/timepoint0/s0";
+
+        N5Reader reader = new N5GithubReader.Builder(url)
+//                .setBranch(branch)
+//				.setSubPath("")
+                .setBackend(N5GithubBackend.N5)
+                .build();
+
+        System.out.println("Created");
+        CachedCellImg<FloatType, ?> img = N5Utils.open(reader, dataset);
+        ImageJFunctions.show(img);
+    }
 
 }
