@@ -69,7 +69,7 @@ public class GithubRepo {
 				'}';
 	}
 
-	private static Map<String, ObjectId> mapFiles(Git git, RevTree tree) throws IOException {
+	public static Map<String, ObjectId> mapFiles(Git git, RevTree tree) throws IOException {
 		Map<String, ObjectId> result = new HashMap<>();
 		TreeWalk treeWalk = new TreeWalk(git.getRepository());
 		treeWalk.addTree(tree);
